@@ -131,8 +131,10 @@ def _perform_aggregation(resource, pipeline, options):
         for key, value in query.items():
             if key[0] != '$':
                 pass
-            for stage in req_pipeline:
-                parse_aggregation_stage(stage, key, value)
+            elif key == '$match':
+                req_pipeline[0]['$match'] = value
+            elif key == '$sort':
+                req_pipeline[2]['$sort'] = value
 
     if req.max_results > 1:
         limit = {"$limit": req.max_results}
