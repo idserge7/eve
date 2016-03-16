@@ -127,14 +127,16 @@ def _perform_aggregation(resource, pipeline, options):
             query = json.loads(req.aggregation)
         except ValueError:
             abort(400, description='Aggregation query could not be parsed.')
-
+        
+        # First $match and last $sort is for user
+        
         for key, value in query.items():
             if key[0] != '$':
                 pass
             elif key == '$match':
                 req_pipeline[0]['$match'] = value
             elif key == '$sort':
-                req_pipeline[2]['$sort'] = value
+                req_pipeline[-1]['$sort'] = value
 
     if req.max_results > 1:
         limit = {"$limit": req.max_results}
