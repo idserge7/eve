@@ -24,6 +24,7 @@ from eve.utils import parse_request, home_link, querydef, config
 from eve.versioning import synthesize_versioned_document, versioned_id_field, \
     get_old_document, diff_document
 
+from eve.custom import utils
 
 @ratelimit()
 @requires_auth('resource')
@@ -127,9 +128,9 @@ def _perform_aggregation(resource, pipeline, options):
             query = json.loads(req.aggregation)
         except ValueError:
             abort(400, description='Aggregation query could not be parsed.')
-        
+
         # First $match and last $sort is for user
-        
+
         for key, value in query.items():
             if key[0] != '$':
                 pass
@@ -137,6 +138,8 @@ def _perform_aggregation(resource, pipeline, options):
                 req_pipeline[0]['$match'] = value
             elif key == '$sort':
                 req_pipeline[-1]['$sort'] = value
+            else:
+                utils.user_aggregation_handler(req_pipeline, key, value)
 
     if req.max_results > 1:
         limit = {"$limit": req.max_results}
