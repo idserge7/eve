@@ -23,8 +23,8 @@ from eve.auth import requires_auth
 from eve.utils import parse_request, home_link, querydef, config
 from eve.versioning import synthesize_versioned_document, versioned_id_field, \
     get_old_document, diff_document
-
 from eve.custom import utils
+
 
 @ratelimit()
 @requires_auth('resource')
