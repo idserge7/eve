@@ -139,7 +139,12 @@ def _perform_aggregation(resource, pipeline, options):
             elif key == '$sort':
                 req_pipeline[-1]['$sort'] = value
             else:
+                # Custom matches overload
                 utils.user_aggregation_handler(req_pipeline, key, value)
+
+                # Default behaviour
+                for stage in req_pipeline:
+                    parse_aggregation_stage(stage, key, value)
 
     if req.max_results > 1:
         limit = {"$limit": req.max_results}
