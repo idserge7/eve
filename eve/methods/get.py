@@ -95,6 +95,9 @@ def get(resource, **lookup):
     datasource = config.DOMAIN[resource]['datasource']
     aggregation = datasource.get('aggregation')
 
+    getattr(app, "pre_fetched_resource")(resource, lookup, datasource)
+    getattr(app, "pre_fetched_resource_%s")(resource, lookup, datasource)
+
     if aggregation:
         return _perform_aggregation(resource, aggregation['pipeline'],
                                     aggregation['options'])
