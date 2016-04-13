@@ -167,8 +167,8 @@ def _perform_aggregation(resource, pipeline, options):
     # provide paination/total count info as we do with a normal (non-aggregate)
     # GET request.
 
-    getattr(app, "on_fetched_aggregation")(resource, req, req_pipeline)
-    getattr(app, "on_fetched_aggregation_%s" % resource)(req, req_pipeline)
+    getattr(app, "on_fetched_aggregation")(resource, response)
+    getattr(app, "on_fetched_aggregation_%s" % resource)(response)
 
     return response, None, None, 200, []
 
