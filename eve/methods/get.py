@@ -133,6 +133,11 @@ def _perform_aggregation(resource, pipeline, options):
     req = parse_request(resource)
 
     req_pipeline = copy.deepcopy(pipeline)
+
+    # Call for functions to modify req_pipeline
+    getattr(app, "pre_aggregation")(resource, req, req_pipeline)
+    getattr(app, "pre_aggregation_%s" % resource)(req, req_pipeline)
+
     if req.aggregation:
         try:
             query = json.loads(req.aggregation)
