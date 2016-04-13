@@ -9,6 +9,26 @@ In Development
 Version 0.7
 ~~~~~~~~~~~
 
+- New: Allow old document versions to be cache validated using ETags (Nick
+  Park).
+
+- New: Support weak ETags, commonly applied by servers transmitting gzipped
+  content (Nick Park).
+
+- New: ``on_oplog_push`` event is fired when OPLOG is about to be updated.
+  Callbacks receive two arguments: ``resource`` (resource name) and ``entries``
+  (list of oplog entries which are about to be written). 
+
+- New: optional ``extra`` field is available for OPLOG entries. Can be updated
+  by callbacks hooked to the new ``on_oplog_push`` event.
+
+- New: OPLOG audit now include the username or token when available. Closes
+  #846. 
+
+- New ``get_internal`` and ``getitem_internal`` functions can be used for
+  internal GET calls. These methods are not rate limited, authentication is not
+  checked and pre-request events are not raised.
+
 - New: Add support for MongoDB ``DBRef`` fields (Roman Gavrilov).
 
 - New: ``MULTIPART_FORM_FIELDS_AS_JSON``. In case you are submitting your
@@ -39,8 +59,26 @@ Version 0.7
 - Fix: ETag request headers which conform to RFC 7232/2.3 (double quoted value)
   are now properly processed. Addresses #794.
 
+Version 0.6.4
+~~~~~~~~~~~~~
+
+- Fix: If datasource source is specified no fields are included by default.
+  Closes #842.
+
+- Docs: Resource configuration doesn't mention ``versioning`` override. Closes
+  #845.
+
+
 Stable
 ------
+
+Version 0.6.3
+~~~~~~~~~~~~~
+
+Released on 16 March, 2016
+
+- Fix: Since 0.6.2, static projections are not honoured. Closes #837.
+
 
 Version 0.6.2
 ~~~~~~~~~~~~~

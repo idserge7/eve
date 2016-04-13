@@ -1,5 +1,5 @@
-from datetime import datetime
 import time
+from datetime import datetime
 
 import simplejson as json
 from bson import ObjectId
@@ -7,6 +7,7 @@ from bson.dbref import DBRef
 
 from eve.methods.common import serialize, normalize_dotted_fields
 from eve.tests import TestBase
+from eve.tests.auth import ValidBasicAuth, ValidTokenAuth, ValidHMACAuth
 from eve.tests.test_settings import MONGO_DBNAME
 from eve.utils import config
 
@@ -427,11 +428,17 @@ class TestOpLogBase(TestBase):
         self.app._init_oplog()
         self.app.register_resource('oplog', self.domain['oplog'])
 
+        settings = self.app.config['DOMAIN']['oplog']
+        datasource = settings['datasource']
+        schema = settings['schema']
+        datasource['projection'] = {}
+        self.app._set_resource_projection(datasource, schema, settings)
+
     def oplog_get(self, url='/oplog'):
         r = self.test_client.get(url)
         return self.parse_response(r)
 
-    def assertOpLogEntry(self, entry, op):
+    def assertOpLogEntry(self, entry, op, user=None):
         self.assertTrue('r' in entry)
         self.assertTrue('i' in entry)
         self.assertTrue(config.LAST_UPDATED in entry)
@@ -441,6 +448,11 @@ class TestOpLogBase(TestBase):
         self.assertTrue('127.0.0.1' in entry['ip'])
         if op in self.app.config['OPLOG_CHANGE_METHODS']:
             self.assertTrue('c' in entry)
+        self.assertTrue('u' in entry)
+        if user:
+            self.assertTrue(user in entry['u'])
+        else:
+            self.assertTrue('n/a' in entry['u'])
 
 
 class TestOpLogEndpointDisabled(TestOpLogBase):
@@ -477,6 +489,47 @@ class TestOpLogEndpointEnabled(TestOpLogBase):
         self.app.config['OPLOG_ENDPOINT'] = 'oplog'
         self.oplog_reset()
 
+    def test_oplog_hook(self):
+        def oplog_callback(resource, entries):
+            for entry in entries:
+                entry['extra'] = {'customfield': 'customvalue'}
+
+        self.app.on_oplog_push += oplog_callback
+
+        r = self.test_client.post(self.known_resource_url,
+                                  data=json.dumps(self.data),
+                                  headers=self.headers,
+                                  environ_base={'REMOTE_ADDR': '127.0.0.1'})
+
+        # oplog enpoint does not expose the 'extra' field
+        r, status = self.oplog_get()
+        self.assert200(status)
+        self.assertEqual(len(r['_items']), 1)
+        oplog_entry = r['_items'][0]
+        self.assertOpLogEntry(oplog_entry, 'POST')
+        self.assertTrue('extra' not in oplog_entry)
+
+        # however the oplog collection has the field.
+        db = self.connection[MONGO_DBNAME]
+        cursor = db.oplog.find()
+        self.assertEqual(cursor.count(), 1)
+        oplog_entry = cursor[0]
+        self.assertTrue('extra' in oplog_entry)
+        self.assertTrue('customvalue' in oplog_entry['extra']['customfield'])
+
+        # enable 'extra' field for the endpoint
+        self.app.config['OPLOG_RETURN_EXTRA_FIELD'] = True
+        self.oplog_reset()
+
+        # now the oplog endpoint includes the 'extra' field
+        r, status = self.oplog_get()
+        self.assert200(status)
+        self.assertEqual(len(r['_items']), 1)
+        oplog_entry = r['_items'][0]
+        self.assertOpLogEntry(oplog_entry, 'POST')
+        self.assertTrue('extra' in oplog_entry)
+        self.assertTrue('customvalue' in oplog_entry['extra']['customfield'])
+
     def test_post_oplog(self):
         r = self.test_client.post(self.known_resource_url,
                                   data=json.dumps(self.data),
@@ -487,6 +540,7 @@ class TestOpLogEndpointEnabled(TestOpLogBase):
         self.assertEqual(len(r['_items']), 1)
         oplog_entry = r['_items'][0]
         self.assertOpLogEntry(oplog_entry, 'POST')
+        self.assertTrue('extra' not in oplog_entry)
 
     def test_patch_oplog(self):
         self.headers.append(('If-Match', self.item_etag))
@@ -554,6 +608,45 @@ class TestOpLogEndpointEnabled(TestOpLogBase):
         oplog_entry = r['_items'][0]
         self.assertOpLogEntry(oplog_entry, 'DELETE')
         self.assertTrue(doc_date != oplog_entry[config.LAST_UPDATED])
+
+    def test_post_oplog_with_basic_auth(self):
+        self.domain['contacts']['authentication'] = ValidBasicAuth
+        self.headers.append(('Authorization', 'Basic YWRtaW46c2VjcmV0'))
+        r = self.test_client.post(self.known_resource_url,
+                                  data=json.dumps(self.data),
+                                  headers=self.headers,
+                                  environ_base={'REMOTE_ADDR': '127.0.0.1'})
+        r, status = self.oplog_get()
+        self.assert200(status)
+        self.assertEqual(len(r['_items']), 1)
+        oplog_entry = r['_items'][0]
+        self.assertOpLogEntry(oplog_entry, 'POST', 'admin')
+
+    def test_post_oplog_with_token_auth(self):
+        self.domain['contacts']['authentication'] = ValidTokenAuth
+        self.headers.append(('Authorization', 'Basic dGVzdF90b2tlbjo='))
+        r = self.test_client.post(self.known_resource_url,
+                                  data=json.dumps(self.data),
+                                  headers=self.headers,
+                                  environ_base={'REMOTE_ADDR': '127.0.0.1'})
+        r, status = self.oplog_get()
+        self.assert200(status)
+        self.assertEqual(len(r['_items']), 1)
+        oplog_entry = r['_items'][0]
+        self.assertOpLogEntry(oplog_entry, 'POST', 'test_token')
+
+    def test_post_oplog_with_hmac_auth(self):
+        self.domain['contacts']['authentication'] = ValidHMACAuth
+        self.headers.append(('Authorization', 'admin:secret'))
+        r = self.test_client.post(self.known_resource_url,
+                                  data=json.dumps(self.data),
+                                  headers=self.headers,
+                                  environ_base={'REMOTE_ADDR': '127.0.0.1'})
+        r, status = self.oplog_get()
+        self.assert200(status)
+        self.assertEqual(len(r['_items']), 1)
+        oplog_entry = r['_items'][0]
+        self.assertOpLogEntry(oplog_entry, 'POST', 'admin')
 
     def patch(self, url, data, headers=[], content_type='application/json'):
         headers.append(('Content-Type', content_type))

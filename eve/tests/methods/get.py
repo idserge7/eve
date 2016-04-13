@@ -11,6 +11,7 @@ from eve.tests.utils import DummyEvent
 from eve.tests.test_settings import MONGO_DBNAME
 from eve.utils import str_to_date, date_to_rfc1123
 from werkzeug import MultiDict
+from eve.methods.get import get_internal, getitem_internal
 
 
 class TestGet(TestBase):
@@ -70,7 +71,14 @@ class TestGet(TestBase):
     def test_get_page(self):
         response, status = self.get(self.known_resource)
         self.assert200(status)
+        self.assertPage(response, status)
 
+    def test_get_internal_page(self):
+        with self.app.test_request_context(self.known_resource_url):
+            response, _, _, status, _ = get_internal(self.known_resource)
+        self.assertPage(response, status)
+
+    def assertPage(self, response, status):
         links = response['_links']
         self.assertNextLink(links, 2)
         self.assertLastLink(links, 5)
@@ -289,6 +297,28 @@ class TestGet(TestBase):
             self.assertFalse('prog' in r)
             self.assertTrue('location' in r)
             self.assertTrue('role' in r)
+            self.assertTrue(self.domain[self.known_resource]['id_field'] in r)
+            self.assertTrue(self.app.config['ETAG'] in r)
+            self.assertTrue(self.app.config['LAST_UPDATED'] in r)
+            self.assertTrue(self.app.config['DATE_CREATED'] in r)
+            self.assertTrue(r[self.app.config['LAST_UPDATED']] != self.epoch)
+            self.assertTrue(r[self.app.config['DATE_CREATED']] != self.epoch)
+
+    def test_get_static_projection(self):
+        """ Test that static projections are honoured """
+        response, status = self.get(self.different_resource)
+        self.assert200(status)
+
+        resource = response['_items']
+
+        # 'users' has a static inclusive projection with 'username' and 'ref'
+        # fields, so other document fields should be excluded.
+        for r in resource:
+            self.assertFalse('location' in r)
+            self.assertFalse('role' in r)
+            self.assertFalse('prog' in r)
+            self.assertTrue('username' in r)
+            self.assertTrue('ref' in r)
             self.assertTrue(self.domain[self.known_resource]['id_field'] in r)
             self.assertTrue(self.app.config['ETAG'] in r)
             self.assertTrue(self.app.config['LAST_UPDATED'] in r)
@@ -1274,6 +1304,11 @@ class TestGetItem(TestBase):
                                     item=self.unknown_item_id)
         self.assert404(status)
 
+    def test_getitem_internal_by_id(self):
+        with self.app.test_request_context(self.known_resource_url):
+            response, _, _, status = getitem_internal(self.known_resource)
+        self.assert200(status)
+
     def test_getitem_noschema(self):
         self.app.config['DOMAIN'][self.known_resource]['schema'] = {}
         response, status = self.get(self.known_resource, item=self.item_id)
@@ -1331,6 +1366,13 @@ class TestGetItem(TestBase):
         r = self.test_client.get(self.item_id_url,
                                  headers=[('If-None-Match',
                                            etag.replace('"', ''))])
+        self.assert304(r.status_code)
+        self.assertTrue(not r.get_data())
+
+        # test that we support weak etags
+        weak_etag = 'W/' + etag
+        r = self.test_client.get(self.item_id_url,
+                                 headers=[('If-None-Match', weak_etag)])
         self.assert304(r.status_code)
         self.assertTrue(not r.get_data())
 
