@@ -246,4 +246,4 @@ MONGO_QUERY_BLACKLIST = ['$where', '$regex']
 # aknowledged writes). This is also the current PyMongo/Mongo default setting.
 MONGO_WRITE_CONCERN = {'w': 1}
 
-ENSURE_ASCII = False    # Allow non-ascii symbols in json
+ENSURE_ASCII = True    # Allow non-ascii symbols in json
