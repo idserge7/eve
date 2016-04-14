@@ -245,3 +245,5 @@ MONGO_QUERY_BLACKLIST = ['$where', '$regex']
 # Explicitly set default write_concern to 'safe' (do regular
 # aknowledged writes). This is also the current PyMongo/Mongo default setting.
 MONGO_WRITE_CONCERN = {'w': 1}
+
+ENSURE_ASCII = False    # Allow non-ascii symbols in json
